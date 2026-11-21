@@ -1,0 +1,6 @@
+{
+  "name": "SEVA AI Platform",
+  "description": "Smart City Civic Assistance & Public Safety Platform with SEVA SAATHI multilingual ElevenLabs voice intelligence.",
+  "requestFramePermissions": ["microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

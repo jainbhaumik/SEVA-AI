@@ -1,0 +1,489 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedEmail() && request.auth.token.email == 'bhaumikjain2506@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedEmail() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isAuthority() {
+      return isAdmin() || (
+        isVerifiedEmail() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'authority'
+      );
+    }
+
+    function isValidLanguage(lang) {
+      return lang in ['en', 'hi', 'bn', 'as'];
+    }
+
+    function isValidCategory(cat) {
+      return cat in ['roads', 'waste', 'drainage', 'traffic', 'accident', 'animal_rescue', 'women_safety', 'medical'];
+    }
+
+    function isValidSeverity(sev) {
+      return sev in ['low', 'medium', 'high', 'critical'];
+    }
+
+    function isValidComplaintStatus(st) {
+      return st in ['submitted', 'under_verification', 'assigned', 'in_progress', 'resolved', 'rejected'];
+    }
+
+    function isValidSosType(t) {
+      return t in ['women_safety', 'medical', 'accident'];
+    }
+
+    function isValidSosStatus(st) {
+      return st in ['received', 'authority_notified', 'acknowledged', 'unit_assigned', 'on_the_way', 'resolved', 'cancelled'];
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'role', 'language', 'points', 'tier', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'fullName', 'email', 'phone', 'role', 'ward', 'language',
+          'departmentCode', 'designation', 'points', 'tier', 'badges',
+          'emergencyContacts', 'voiceConsent', 'voiceEmergencyPhraseEnabled',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 24))
+        && data.role in ['citizen', 'authority', 'admin']
+        && (!('ward' in data) || (data.ward is string && data.ward.size() <= 80))
+        && isValidLanguage(data.language)
+        && (!('departmentCode' in data) || (data.departmentCode is string && data.departmentCode.size() <= 16))
+        && (!('designation' in data) || (data.designation is string && data.designation.size() <= 100))
+        && data.points is number && data.points >= 0 && data.points <= 1000000
+        && data.tier in ['bronze', 'silver', 'gold', 'platinum']
+        && (!('badges' in data) || (data.badges is list && data.badges.size() <= 20))
+        && (!('emergencyContacts' in data) || (data.emergencyContacts is list && data.emergencyContacts.size() <= 5))
+        && (!('voiceConsent' in data) || data.voiceConsent is bool)
+        && (!('voiceEmergencyPhraseEnabled' in data) || data.voiceEmergencyPhraseEnabled is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'points', 'verifiedReports', 'tier', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'ward', 'points', 'verifiedReports', 'tier', 'badges', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && (!('ward' in data) || (data.ward is string && data.ward.size() <= 80))
+        && data.points is number && data.points >= 0 && data.points <= 1000000
+        && data.verifiedReports is number && data.verifiedReports >= 0 && data.verifiedReports <= 100000
+        && data.tier in ['bronze', 'silver', 'gold', 'platinum']
+        && (!('badges' in data) || (data.badges is list && data.badges.size() <= 20))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuthorityRequest(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'departmentCode', 'designation', 'badgeNumber', 'assignedWard', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'fullName', 'email', 'departmentCode', 'departmentName', 'designation', 'badgeNumber', 'assignedWard', 'status', 'reviewedBy', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && data.departmentCode in ['PWD', 'MWD', 'DRB', 'TPCR', 'ECR', 'PCR', 'AWB']
+        && (!('departmentName' in data) || (data.departmentName is string && data.departmentName.size() <= 120))
+        && data.designation is string && data.designation.size() >= 2 && data.designation.size() <= 100
+        && data.badgeNumber is string && data.badgeNumber.size() >= 2 && data.badgeNumber.size() <= 40
+        && data.assignedWard is string && data.assignedWard.size() >= 1 && data.assignedWard.size() <= 80
+        && data.status in ['pending', 'approved', 'rejected']
+        && (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidComplaint(data) {
+      return data.keys().hasAll([
+          'reportCode', 'trackToken', 'citizenId', 'category', 'title', 'description',
+          'severity', 'status', 'ward', 'locationText', 'departmentCode', 'source',
+          'language', 'confirmationsCount', 'heatmapApproved', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'reportCode', 'trackToken', 'citizenId', 'citizenName', 'category', 'subcategory',
+          'title', 'description', 'severity', 'status', 'ward', 'locationText', 'lat', 'lng',
+          'departmentCode', 'departmentName', 'source', 'language', 'photoDataUrl',
+          'confirmationsCount', 'resolutionNote', 'assignedOfficerName', 'heatmapApproved',
+          'createdAt', 'updatedAt'
+        ])
+        && data.reportCode is string && data.reportCode.size() >= 4 && data.reportCode.size() <= 32
+        && isValidId(data.trackToken)
+        && isValidId(data.citizenId)
+        && (!('citizenName' in data) || (data.citizenName is string && data.citizenName.size() <= 120))
+        && isValidCategory(data.category)
+        && (!('subcategory' in data) || (data.subcategory is string && data.subcategory.size() <= 80))
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 2000
+        && isValidSeverity(data.severity)
+        && isValidComplaintStatus(data.status)
+        && data.ward is string && data.ward.size() >= 1 && data.ward.size() <= 80
+        && data.locationText is string && data.locationText.size() >= 2 && data.locationText.size() <= 240
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180))
+        && data.departmentCode is string && data.departmentCode.size() >= 2 && data.departmentCode.size() <= 16
+        && (!('departmentName' in data) || (data.departmentName is string && data.departmentName.size() <= 120))
+        && data.source in ['form', 'voice_seva_saathi']
+        && isValidLanguage(data.language)
+        && (!('photoDataUrl' in data) || (data.photoDataUrl is string && data.photoDataUrl.size() <= 350000))
+        && data.confirmationsCount is number && data.confirmationsCount >= 0 && data.confirmationsCount <= 100000
+        && (!('resolutionNote' in data) || (data.resolutionNote is string && data.resolutionNote.size() <= 1000))
+        && (!('assignedOfficerName' in data) || (data.assignedOfficerName is string && data.assignedOfficerName.size() <= 120))
+        && data.heatmapApproved is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicTrack(data) {
+      return data.keys().hasAll([
+          'trackToken', 'reportCode', 'category', 'title', 'severity', 'status',
+          'ward', 'departmentName', 'confirmationsCount', 'heatmapApproved', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'trackToken', 'reportCode', 'category', 'title', 'severity', 'status',
+          'ward', 'departmentName', 'resolutionNote', 'lat', 'lng',
+          'confirmationsCount', 'heatmapApproved', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.trackToken)
+        && data.reportCode is string && data.reportCode.size() >= 4 && data.reportCode.size() <= 32
+        && isValidCategory(data.category)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && isValidSeverity(data.severity)
+        && isValidComplaintStatus(data.status)
+        && data.ward is string && data.ward.size() >= 1 && data.ward.size() <= 80
+        && data.departmentName is string && data.departmentName.size() >= 2 && data.departmentName.size() <= 120
+        && (!('resolutionNote' in data) || (data.resolutionNote is string && data.resolutionNote.size() <= 1000))
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180))
+        && data.confirmationsCount is number && data.confirmationsCount >= 0 && data.confirmationsCount <= 100000
+        && data.heatmapApproved is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSosAlert(data) {
+      return data.keys().hasAll(['requestCode', 'citizenId', 'type', 'triggerSource', 'status', 'ward', 'locationText', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['requestCode', 'citizenId', 'citizenName', 'type', 'triggerSource', 'status', 'ward', 'locationText', 'lat', 'lng', 'notes', 'unitAssigned', 'acknowledgedBy', 'createdAt', 'updatedAt'])
+        && data.requestCode is string && data.requestCode.size() >= 4 && data.requestCode.size() <= 32
+        && isValidId(data.citizenId)
+        && (!('citizenName' in data) || (data.citizenName is string && data.citizenName.size() <= 120))
+        && isValidSosType(data.type)
+        && data.triggerSource in ['manual_button', 'voice_phrase', 'voice_assistant', 'form']
+        && isValidSosStatus(data.status)
+        && data.ward is string && data.ward.size() >= 1 && data.ward.size() <= 80
+        && data.locationText is string && data.locationText.size() >= 1 && data.locationText.size() <= 240
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && (!('unitAssigned' in data) || (data.unitAssigned is string && data.unitAssigned.size() <= 120))
+        && (!('acknowledgedBy' in data) || (data.acknowledgedBy is string && data.acknowledgedBy.size() <= 120))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'title', 'body', 'type', 'read', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'title', 'body', 'type', 'relatedId', 'read', 'createdAt'])
+        && isValidId(data.userId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 500
+        && data.type in ['report_update', 'sos_update', 'reward', 'system']
+        && (!('relatedId' in data) || (data.relatedId is string && data.relatedId.size() <= 128))
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidDpdpRequest(data) {
+      return data.keys().hasAll(['userId', 'userName', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'userName', 'reason', 'status', 'reviewedBy', 'createdAt', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120
+        && data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 1000
+        && data.status in ['pending', 'processed', 'rejected']
+        && (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAward(data) {
+      return data.keys().hasAll(['year', 'title', 'recipientName', 'ward', 'points', 'verifiedReports', 'createdAt'])
+        && data.keys().hasOnly(['year', 'title', 'recipientUid', 'recipientName', 'ward', 'points', 'verifiedReports', 'citation', 'createdAt'])
+        && data.year is number && data.year >= 2024 && data.year <= 2035
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && (!('recipientUid' in data) || isValidId(data.recipientUid))
+        && data.recipientName is string && data.recipientName.size() >= 2 && data.recipientName.size() <= 120
+        && data.ward is string && data.ward.size() >= 1 && data.ward.size() <= 80
+        && data.points is number && data.points >= 0 && data.points <= 1000000
+        && data.verifiedReports is number && data.verifiedReports >= 0 && data.verifiedReports <= 100000
+        && (!('citation' in data) || (data.citation is string && data.citation.size() <= 500))
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create, update, delete: if isBootstrappedAdmin() && isValidId(adminId);
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAuthority());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(userId)
+        && isVerifiedEmail()
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && (incoming().role == 'citizen' || (isBootstrappedAdmin() && incoming().role == 'admin'))
+        && incoming().points == 0
+        && incoming().tier == 'bronze'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().points == existing().points
+            && incoming().tier == existing().tier
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'fullName', 'phone', 'ward', 'language', 'emergencyContacts',
+              'voiceConsent', 'voiceEmergencyPhraseEnabled', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /public_profiles/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create: if isValidId(userId)
+        && isVerifiedEmail()
+        && isOwner(userId)
+        && isValidPublicProfile(incoming())
+        && incoming().uid == userId
+        && incoming().points == 0
+        && incoming().verifiedReports == 0
+        && incoming().tier == 'bronze'
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidPublicProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && (
+          isAuthority() ||
+          (
+            isOwner(userId)
+            && incoming().points == existing().points
+            && incoming().verifiedReports == existing().verifiedReports
+            && incoming().tier == existing().tier
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'ward', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /authority_requests/{requestId} {
+      allow get: if isValidId(requestId) && (isAdmin() || (isSignedIn() && existing().uid == request.auth.uid));
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isValidId(requestId)
+        && isVerifiedEmail()
+        && isValidAuthorityRequest(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId)
+        && isAdmin()
+        && isValidAuthorityRequest(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedBy', 'updatedAt']);
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    match /complaints/{complaintId} {
+      allow get: if isValidId(complaintId) && (isAuthority() || (isSignedIn() && existing().citizenId == request.auth.uid));
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.citizenId == request.auth.uid);
+      allow create: if isValidId(complaintId)
+        && isVerifiedEmail()
+        && isValidComplaint(incoming())
+        && incoming().citizenId == request.auth.uid
+        && incoming().status == 'submitted'
+        && incoming().confirmationsCount == 0
+        && incoming().heatmapApproved == false
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(complaintId)
+        && isValidComplaint(incoming())
+        && incoming().citizenId == existing().citizenId
+        && incoming().reportCode == existing().reportCode
+        && incoming().trackToken == existing().trackToken
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAuthority() ||
+          (
+            isOwner(existing().citizenId)
+            && !(existing().status in ['resolved', 'rejected'])
+            && incoming().status == existing().status
+            && incoming().heatmapApproved == existing().heatmapApproved
+            && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'locationText', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(complaintId) && isAdmin();
+    }
+
+    match /public_tracks/{trackToken} {
+      allow get: if isValidId(trackToken);
+      allow list: if true;
+      allow create: if isValidId(trackToken)
+        && isVerifiedEmail()
+        && isValidPublicTrack(incoming())
+        && incoming().trackToken == trackToken
+        && incoming().status == 'submitted'
+        && incoming().confirmationsCount == 0
+        && incoming().heatmapApproved == false
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(trackToken)
+        && isValidPublicTrack(incoming())
+        && incoming().trackToken == existing().trackToken
+        && incoming().reportCode == existing().reportCode
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAuthority() ||
+          (
+            isVerifiedEmail()
+            && incoming().status == existing().status
+            && incoming().heatmapApproved == existing().heatmapApproved
+            && incoming().confirmationsCount == existing().confirmationsCount + 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['confirmationsCount', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(trackToken) && isAdmin();
+    }
+
+    match /sos_alerts/{alertId} {
+      allow get: if isValidId(alertId) && (isAuthority() || (isSignedIn() && existing().citizenId == request.auth.uid));
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.citizenId == request.auth.uid);
+      allow create: if isValidId(alertId)
+        && isVerifiedEmail()
+        && isValidSosAlert(incoming())
+        && incoming().citizenId == request.auth.uid
+        && incoming().status in ['received', 'authority_notified']
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(alertId)
+        && isValidSosAlert(incoming())
+        && incoming().citizenId == existing().citizenId
+        && incoming().requestCode == existing().requestCode
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAuthority() ||
+          (
+            isOwner(existing().citizenId)
+            && !(existing().status in ['resolved', 'cancelled'])
+            && incoming().status == 'cancelled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(alertId) && isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(notificationId)
+        && isVerifiedEmail()
+        && isValidNotification(incoming())
+        && (isAuthority() || incoming().userId == request.auth.uid)
+        && incoming().read == false
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && isOwner(existing().userId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isValidId(notificationId) && (isOwner(existing().userId) || isAdmin());
+    }
+
+    match /dpdp_requests/{requestId} {
+      allow get: if isValidId(requestId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(requestId)
+        && isVerifiedEmail()
+        && isValidDpdpRequest(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId)
+        && isAdmin()
+        && isValidDpdpRequest(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedBy', 'updatedAt']);
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    match /awards/{awardId} {
+      allow get: if isValidId(awardId);
+      allow list: if true;
+      allow create: if isValidId(awardId)
+        && isAdmin()
+        && isValidAward(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if isValidId(awardId) && isAdmin();
+    }
+  }
+}

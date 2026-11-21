@@ -1,0 +1,229 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile for citizens and authorities.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 24 },
+        "role": { "type": "string", "enum": ["citizen", "authority", "admin"] },
+        "ward": { "type": "string", "maxLength": 80 },
+        "language": { "type": "string", "enum": ["en", "hi", "bn", "as"] },
+        "departmentCode": { "type": "string", "maxLength": 16 },
+        "designation": { "type": "string", "maxLength": 100 },
+        "points": { "type": "number" },
+        "tier": { "type": "string", "enum": ["bronze", "silver", "gold", "platinum"] },
+        "badges": { "type": "array" },
+        "emergencyContacts": { "type": "array" },
+        "voiceConsent": { "type": "boolean" },
+        "voiceEmergencyPhraseEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "role", "language", "points", "tier", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Non-PII public contributor profile for leaderboard and Hall of Fame.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "ward": { "type": "string", "maxLength": 80 },
+        "points": { "type": "number" },
+        "verifiedReports": { "type": "number" },
+        "tier": { "type": "string", "enum": ["bronze", "silver", "gold", "platinum"] },
+        "badges": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "points", "verifiedReports", "tier", "updatedAt"]
+    },
+    "AuthorityRequest": {
+      "title": "AuthorityRequest",
+      "description": "Officer verification request awaiting admin approval.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "departmentCode": { "type": "string", "enum": ["PWD", "MWD", "DRB", "TPCR", "ECR", "PCR", "AWB"] },
+        "departmentName": { "type": "string", "maxLength": 120 },
+        "designation": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "badgeNumber": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "assignedWard": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "departmentCode", "designation", "badgeNumber", "assignedWard", "status", "createdAt", "updatedAt"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Civic or safety complaint submitted by a citizen via form or SEVA SAATHI voice.",
+      "type": "object",
+      "properties": {
+        "reportCode": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "trackToken": { "type": "string", "minLength": 6, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "citizenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "citizenName": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "enum": ["roads", "waste", "drainage", "traffic", "accident", "animal_rescue", "women_safety", "medical"] },
+        "subcategory": { "type": "string", "maxLength": 80 },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 2000 },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "type": "string", "enum": ["submitted", "under_verification", "assigned", "in_progress", "resolved", "rejected"] },
+        "ward": { "type": "string", "maxLength": 80 },
+        "locationText": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "departmentCode": { "type": "string", "maxLength": 16 },
+        "departmentName": { "type": "string", "maxLength": 120 },
+        "source": { "type": "string", "enum": ["form", "voice_seva_saathi"] },
+        "language": { "type": "string", "enum": ["en", "hi", "bn", "as"] },
+        "photoDataUrl": { "type": "string", "maxLength": 350000 },
+        "confirmationsCount": { "type": "number" },
+        "resolutionNote": { "type": "string", "maxLength": 1000 },
+        "assignedOfficerName": { "type": "string", "maxLength": 120 },
+        "heatmapApproved": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reportCode", "trackToken", "citizenId", "category", "title", "description", "severity", "status", "ward", "locationText", "departmentCode", "source", "language", "confirmationsCount", "heatmapApproved", "createdAt", "updatedAt"]
+    },
+    "PublicTrack": {
+      "title": "PublicTrack",
+      "description": "Public non-PII tracking snapshot indexed by trackToken.",
+      "type": "object",
+      "properties": {
+        "trackToken": { "type": "string", "minLength": 6, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reportCode": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "category": { "type": "string", "enum": ["roads", "waste", "drainage", "traffic", "accident", "animal_rescue", "women_safety", "medical"] },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "type": "string", "enum": ["submitted", "under_verification", "assigned", "in_progress", "resolved", "rejected"] },
+        "ward": { "type": "string", "maxLength": 80 },
+        "departmentName": { "type": "string", "maxLength": 120 },
+        "resolutionNote": { "type": "string", "maxLength": 1000 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "confirmationsCount": { "type": "number" },
+        "heatmapApproved": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["trackToken", "reportCode", "category", "title", "severity", "status", "ward", "departmentName", "confirmationsCount", "heatmapApproved", "createdAt", "updatedAt"]
+    },
+    "SosAlert": {
+      "title": "SosAlert",
+      "description": "Emergency SOS, Medical, or Accident alert triggered by a citizen.",
+      "type": "object",
+      "properties": {
+        "requestCode": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "citizenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "citizenName": { "type": "string", "maxLength": 120 },
+        "type": { "type": "string", "enum": ["women_safety", "medical", "accident"] },
+        "triggerSource": { "type": "string", "enum": ["manual_button", "voice_phrase", "voice_assistant", "form"] },
+        "status": { "type": "string", "enum": ["received", "authority_notified", "acknowledged", "unit_assigned", "on_the_way", "resolved", "cancelled"] },
+        "ward": { "type": "string", "maxLength": 80 },
+        "locationText": { "type": "string", "maxLength": 240 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "unitAssigned": { "type": "string", "maxLength": 120 },
+        "acknowledgedBy": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestCode", "citizenId", "type", "triggerSource", "status", "ward", "locationText", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification for report or emergency updates.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "type": { "type": "string", "enum": ["report_update", "sos_update", "reward", "system"] },
+        "relatedId": { "type": "string", "maxLength": 128 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "body", "type", "read", "createdAt"]
+    },
+    "DpdpRequest": {
+      "title": "DpdpRequest",
+      "description": "DPDP data deletion or privacy request submitted by a citizen.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "maxLength": 120 },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["pending", "processed", "rejected"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "AwardRecord": {
+      "title": "AwardRecord",
+      "description": "Annual civic award and Hall of Fame entry.",
+      "type": "object",
+      "properties": {
+        "year": { "type": "number" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "recipientUid": { "type": "string", "maxLength": 128 },
+        "recipientName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "ward": { "type": "string", "maxLength": 80 },
+        "points": { "type": "number" },
+        "verifiedReports": { "type": "number" },
+        "citation": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["year", "title", "recipientName", "ward", "points", "verifiedReports", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private citizen and authority profiles."
+    },
+    "/public_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Non-PII public leaderboard profiles."
+    },
+    "/authority_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/AuthorityRequest" },
+      "description": "Pending and reviewed authority registration requests."
+    },
+    "/complaints/{complaintId}": {
+      "schema": { "$ref": "#/entities/Complaint" },
+      "description": "Citizen civic and safety complaints."
+    },
+    "/public_tracks/{trackToken}": {
+      "schema": { "$ref": "#/entities/PublicTrack" },
+      "description": "Public tracking and community heatmap/nearby feed without PII."
+    },
+    "/sos_alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/SosAlert" },
+      "description": "Emergency SOS, medical, and accident dispatch alerts."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User-scoped notifications."
+    },
+    "/dpdp_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/DpdpRequest" },
+      "description": "Citizen DPDP deletion requests."
+    },
+    "/awards/{awardId}": {
+      "schema": { "$ref": "#/entities/AwardRecord" },
+      "description": "Public Hall of Fame & Annual Civic Awards."
+    }
+  }
+}
